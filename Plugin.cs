@@ -17,6 +17,7 @@ using UnityEngine;
 
 namespace SpeedrunnerVsHunter;
 
+[BepInDependency("henpemaz.rainmeadow", BepInDependency.DependencyFlags.HardDependency)]
 [BepInPlugin("LazyCowboy.SpeedrunnerVsHunter", "SpeedrunnerVsHunter", "0.0.1")]
 public class Plugin : SimplerPlugin
 {
@@ -30,6 +31,11 @@ public class Plugin : SimplerPlugin
 
 
     #endregion
+
+    public static bool RandomizeStartingShelter = false;
+
+    private const string RANDOMIZE_SHELTERS_ID = "RANDOMIZESHELTER";
+    private CheckBox RandomShelterCheckbox = null;
 
     #region Hooks
 
@@ -64,9 +70,10 @@ public class Plugin : SimplerPlugin
         On.Menu.SlugcatSelectMenu.SetChecked -= SlugcatSelectMenu_SetChecked;
     }
 
+    //when changing regions, update the StoryGameMode flags so that we still let new players join
     private void OverWorld_WorldLoaded(On.OverWorld.orig_WorldLoaded orig, OverWorld self, bool warpUsed)
     {
-        //needs more fine-tuning to work 100% of the time
+        string oldRegion = self.activeWorld?.name;
         AbstractRoom myRoom = self.reportBackToGate?.room.abstractRoom ?? (self.specialWarpCallback as Watcher.WarpPoint)?.room.abstractRoom;
 
         orig(self, warpUsed);
@@ -75,6 +82,11 @@ public class Plugin : SimplerPlugin
         {
             if (OnlineManager.lobby == null || !OnlineManager.lobby.isOwner || !RainMeadow.RainMeadow.isStoryMode(out StoryGameMode gameMode))
                 return;
+            if (oldRegion == null || self.activeWorld.name == oldRegion)
+            {
+                Log($"Didn't change regions. Old region={oldRegion}, activeWorld.name={self.activeWorld.name}");
+                return;
+            }
 
             bool foundNewDen = false;
             //change myLastDenPos
@@ -125,19 +137,18 @@ public class Plugin : SimplerPlugin
         catch (Exception ex) { Error(ex); }
     }
 
-    public static bool RandomizeStartingShelter = false;
-
+    //if RandomizeStartingShelter, randomize the spawn den location
     private void RainMeadow_SaveStateHandler(Action<RainMeadow.RainMeadow, PlayerProgression, StoryGameMode, RainWorldGame> orig, RainMeadow.RainMeadow realSelf, PlayerProgression self, StoryGameMode storyGameMode, RainWorldGame game)
     {
         orig(realSelf, self, storyGameMode, game);
 
         try
         {
-            if (RandomizeSheltersCheckbox != null)
+            if (RandomShelterCheckbox != null)
             {
-                RandomizeStartingShelter = RandomizeSheltersCheckbox.Checked; //read it
-                RandomizeSheltersCheckbox.RemoveSprites(); //erase it
-                RandomizeSheltersCheckbox = null; //destroy it
+                RandomizeStartingShelter = RandomShelterCheckbox.Checked; //read it
+                RandomShelterCheckbox.RemoveSprites(); //erase it
+                RandomShelterCheckbox = null; //destroy it
                 Log("RandomizeStartingShelter = " + RandomizeStartingShelter);
             }
             if (!RandomizeStartingShelter)
@@ -159,8 +170,7 @@ public class Plugin : SimplerPlugin
         catch (Exception ex) { Error(ex); }
     }
 
-    private const string RANDOMIZE_SHELTERS_ID = "RANDOMIZESHELTER";
-    private CheckBox RandomizeSheltersCheckbox = null;
+    //create the Random Shelter checkbox
     private void StoryOnlineMenu_ctor(Action<StoryOnlineMenu, ProcessManager> orig, StoryOnlineMenu self, ProcessManager manager)
     {
         orig(self, manager);
@@ -170,12 +180,12 @@ public class Plugin : SimplerPlugin
             if (self.ID != RainMeadow.RainMeadow.Ext_ProcessID.StoryMenu) //don't do it for custom gamemodes based off of Story, like Capture the Pearl
                 return;
 
-            RandomizeSheltersCheckbox?.RemoveSprites(); //whatcha still doing alive??? Get outta here
+            RandomShelterCheckbox?.RemoveSprites(); //whatcha still doing alive??? Get outta here
 
             //add checkbox just below restartCheckbox
-            RandomizeSheltersCheckbox = new(self, self.pages[0], self, self.restartCheckboxPos + new Vector2(0, 70f), 90f, self.Translate("Random Shelter"), RANDOMIZE_SHELTERS_ID, false);
+            RandomShelterCheckbox = new(self, self.pages[0], self, self.restartCheckboxPos + new Vector2(0, 70f), 95f, self.Translate("Random Shelter"), RANDOMIZE_SHELTERS_ID, false);
             //RandomizeSheltersCheckbox.Checked = RandomizeStartingShelter;
-            self.pages[0].subObjects.Add(RandomizeSheltersCheckbox);
+            self.pages[0].subObjects.Add(RandomShelterCheckbox);
 
             Log("Added RandomizeSheltersCheckbox");
         }

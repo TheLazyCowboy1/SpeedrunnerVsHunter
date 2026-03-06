@@ -12,7 +12,7 @@ namespace EasyModSetup;
 /// and override the ApplyHooks and RemoveHooks functions.
 /// If you need to apply any hooks before mods are initialized, try overriding the Initialize function and adding such hooks there.
 /// </summary>
-[BepInDependency("henpemaz.rainmeadow", BepInDependency.DependencyFlags.SoftDependency)]
+//[BepInDependency("henpemaz.rainmeadow", BepInDependency.DependencyFlags.SoftDependency)] //hard dependency in Plugin.cs
 [BepInDependency("twofour2.rainReloader", BepInDependency.DependencyFlags.SoftDependency)]
 public abstract class SimplerPlugin : BaseUnityPlugin
 {
