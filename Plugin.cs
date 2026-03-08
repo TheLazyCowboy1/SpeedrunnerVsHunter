@@ -72,11 +72,29 @@ public class Plugin : SimplerPlugin
 
     #endregion
 
-    #region ChangingWorldHooks
+    #region ChaningWorldRPCs
 
     private static bool lobbyOwnerHasMod = false;
     private static OnlinePlayer lastAskedLobbyOwner = null;
 
+    /// <summary>
+    /// Run if a player does in fact have this mod. This function will update lobbyOwnerHasMod and lastAskedLobbyOwner if necessary.
+    /// </summary>
+    /// <param name="player">The player who has this mod.</param>
+    public static void PlayerHasMod(OnlinePlayer player)
+    {
+        if (OnlineManager.lobby != null && player == OnlineManager.lobby.owner)
+        {
+            if (!lobbyOwnerHasMod || player != lastAskedLobbyOwner) //only log it when relevant
+                Log($"Lobby owner {player.id.DisplayName} has this mod");
+            lastAskedLobbyOwner = player;
+            lobbyOwnerHasMod = true;
+        }
+    }
+
+    /// <summary>
+    /// Clearing myLastDenPos causes me to use the host's denPos (gameMode.defaultDenPos) instead of my own.
+    /// </summary>
     [SoftRPCMethod]
     public static void ClearMyLastDenPos(SoftRPCEvent ev)//, string newDenPos)
     {
@@ -86,22 +104,39 @@ public class Plugin : SimplerPlugin
             gameMode.myLastDenPos = null; //use the host's denPos
             gameMode.myLastWarp = null; //don't try to spawn in at a warp
             ev.Resolve(new GenericResult.Ok());
+            Log("Cleared myLastDenPos, per request from " + ev.from.id.DisplayName);
 
-            if (ev.from == gameMode.lobby.owner)
-            {
-                lastAskedLobbyOwner = ev.from; //no need to ask if host has this mod
-                lobbyOwnerHasMod = true; //because he just sent me an RPC from this mod!
-            }
+            //no need to ask if host has this mod, because he just sent me an RPC from this mod!
+            PlayerHasMod(ev.from);
         }
         else
             ev.Resolve(new GenericResult.Fail());
     }
 
     [SoftRPCMethod]
-    public static void AskHasThisMod(SoftRPCEvent ev)
+    public static void AskHasModRPC(SoftRPCEvent ev)
     {
         ev.Resolve(new GenericResult.Ok()); //yup, I got this mod!
     }
+
+    public static void AskIfPlayerHasMod(OnlinePlayer player)
+    {
+        lastAskedLobbyOwner = player; //set to asked, so that we don't ask again
+        lobbyOwnerHasMod = false; //assume the result is negative until we hear otherwise
+        lastAskedLobbyOwner.InvokeRPC(AskHasModRPC)
+            .Then(result =>
+            {
+                if (result is GenericResult.Ok)
+                    PlayerHasMod(player);
+                else
+                    Log($"Player {player.id.DisplayName} does NOT have this mod");
+            });
+        Log($"Asking player {player.id.DisplayName} whether he has this mod");
+    }
+
+    #endregion
+
+    #region ChangingWorldHooks
 
     //when changing regions, update the StoryGameMode flags so that we still let new players join
     private void OverWorld_WorldLoaded(On.OverWorld.orig_WorldLoaded orig, OverWorld self, bool warpUsed)
@@ -196,15 +231,7 @@ public class Plugin : SimplerPlugin
         {
             if (lastAskedLobbyOwner == null || lastAskedLobbyOwner != self.lobby.owner) //we haven't asked for permission yet
             {
-                lastAskedLobbyOwner = self.lobby.owner;
-                lobbyOwnerHasMod = false;
-                lastAskedLobbyOwner.InvokeRPC(AskHasThisMod)
-                    .Then(result =>
-                    {
-                        if (result is GenericResult.Ok)
-                            lobbyOwnerHasMod = true;
-                    });
-                //return orig(self); //wait until we have permission
+                AskIfPlayerHasMod(self.lobby.owner);
             }
             else if (lobbyOwnerHasMod) //lobby owner has mod, so act as if changedRegions is always false
             {
