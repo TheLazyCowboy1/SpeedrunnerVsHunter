@@ -128,7 +128,7 @@ public class Plugin : SimplerPlugin
             {
                 gameMode.region = self.activeWorld.name;
                 gameMode.changedRegions = false; //lie and say we didn't change regions
-                gameMode.readyForTransition = StoryGameMode.ReadyForTransition.Closed;
+                //gameMode.readyForTransition = StoryGameMode.ReadyForTransition.Closed; //actually don't change this; Meadow will change this to Closed on its own at the right time
                 Log("Closest den in region: " + gameMode.myLastDenPos);
             }
             else
@@ -160,7 +160,8 @@ public class Plugin : SimplerPlugin
                 self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.saveStateNumber, new string[] { den }, 1, 1f, 1000f, 10000f);
             } catch (KeyNotFoundException ex)
             {
-                Log(ex); //try again; this time just to find ANY random shelter
+                Log("Cannot find position of lobby spawn shelter: ERROR: " + ex.Message);
+                //try again; this time just to find ANY random shelter
                 self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.saveStateNumber, new string[0], 0, 1f, 1000f, 10000f);
             }
             self.currentSaveState.warpPointTargetAfterWarpPointSave = null; //don't spawn at the warp!
