@@ -233,7 +233,7 @@ public class Plugin : SimplerPlugin
     /// </summary>
     private bool StoryGameMode_canJoinGame(Func<StoryGameMode, bool> orig, StoryGameMode self)
     {
-        if (self.changedRegions && self.myLastDenPos == null)
+        if (self.changedRegions)
         {
             if (lastAskedLobbyOwner == null || lastAskedLobbyOwner != self.lobby.owner) //we haven't asked for permission yet
             {
@@ -268,9 +268,9 @@ public class Plugin : SimplerPlugin
     {
         try
         {
-            if (!storyGameMode.lobby.isOwner) //leave the host alone; he's fine
+            if (!storyGameMode.lobby.isOwner) //don't mess with the host's save
             {
-                if (storyGameMode.changedRegions)
+                if (storyGameMode.changedRegions && lobbyOwnerHasMod && storyGameMode.lobby.owner == lastAskedLobbyOwner)
                 {
                     //dig up defaultDenPos out of the abyss we call the state data structure. It IS THERE and WE DO HAVE IT; we just have to dig it up!
                     //lobby => lobbyState => lobbyResourceDataStates => StoryLobbyData.State => defaultDenPos
@@ -278,7 +278,10 @@ public class Plugin : SimplerPlugin
                     Log("Found defaultDenPos in StoryLobbyData.State: " + storyGameMode.myLastDenPos);
                 }
                 else
+                {
                     storyGameMode.myLastDenPos = null; //clients always clear myLastDenPos; it only causes problems
+                    Log("Set myLastDenPos to null, because that annoying thing only causes problems.");
+                }
             }
         }
         catch (Exception ex) { Error(ex); }
@@ -290,14 +293,14 @@ public class Plugin : SimplerPlugin
             if (RandomShelterCheckbox != null)
             {
                 RandomizeStartingShelter = RandomShelterCheckbox.Checked; //read it
-                RandomShelterCheckbox.RemoveSprites(); //erase it
+                RandomShelterCheckbox.RemoveSprites(); //remove it
                 RandomShelterCheckbox = null; //destroy it
                 Log("RandomizeStartingShelter = " + RandomizeStartingShelter);
             }
             if (!RandomizeStartingShelter)
                 return;
 
-            string den = storyGameMode.myLastWarp?.destRoom ?? self.currentSaveState.denPosition; //use last warp if it exists; hopefully it doesn't
+            string den = self.currentSaveState.warpPointTargetAfterWarpPointSave?.destRoom ?? self.currentSaveState.denPosition; //use last warp if it exists; hopefully it doesn't
             try
             { //find any shelter except the current one
                 self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.saveStateNumber, new string[] { den }, 1, 1f, 1000f, 10000f);
