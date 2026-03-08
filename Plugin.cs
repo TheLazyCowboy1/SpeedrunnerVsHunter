@@ -32,12 +32,7 @@ public class Plugin : SimplerPlugin
 
     #endregion
 
-    public static bool RandomizeStartingShelter = false;
-
-    private const string RANDOMIZE_SHELTERS_ID = "RANDOMIZESHELTER";
-    private CheckBox RandomShelterCheckbox = null;
-
-    #region Hooks
+    #region HooksSetup
 
     private static System.Reflection.BindingFlags defaultFlags =
         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
@@ -46,6 +41,10 @@ public class Plugin : SimplerPlugin
     {
         On.OverWorld.WorldLoaded += OverWorld_WorldLoaded;
 
+        canJoinHook = new Hook(
+            typeof(StoryGameMode).GetProperty(nameof(StoryGameMode.canJoinGame)).GetGetMethod(),
+            StoryGameMode_canJoinGame
+            );
         saveStateHook = new Hook(
             typeof(RainMeadow.RainMeadow).GetMethod(nameof(RainMeadow.RainMeadow.SaveStateHandler), defaultFlags),
             RainMeadow_SaveStateHandler
@@ -59,15 +58,49 @@ public class Plugin : SimplerPlugin
         On.Menu.SlugcatSelectMenu.SetChecked += SlugcatSelectMenu_SetChecked;
     }
 
-    private Hook saveStateHook, menuHook;
+    private Hook canJoinHook, saveStateHook, menuHook;
 
     public override void RemoveHooks()
     {
         On.OverWorld.WorldLoaded -= OverWorld_WorldLoaded;
+        canJoinHook?.Undo();
         saveStateHook?.Undo();
         menuHook?.Undo();
         On.Menu.SlugcatSelectMenu.GetChecked -= SlugcatSelectMenu_GetChecked;
         On.Menu.SlugcatSelectMenu.SetChecked -= SlugcatSelectMenu_SetChecked;
+    }
+
+    #endregion
+
+    #region ChangingWorldHooks
+
+    private static bool lobbyOwnerHasMod = false;
+    private static OnlinePlayer lastAskedLobbyOwner = null;
+
+    [SoftRPCMethod]
+    public static void ClearMyLastDenPos(SoftRPCEvent ev)//, string newDenPos)
+    {
+        if (RainMeadow.RainMeadow.isStoryMode(out StoryGameMode gameMode))
+        {
+            //gameMode.myLastDenPos = newDenPos; //set my den pos
+            gameMode.myLastDenPos = null; //use the host's denPos
+            gameMode.myLastWarp = null; //don't try to spawn in at a warp
+            ev.Resolve(new GenericResult.Ok());
+
+            if (ev.from == gameMode.lobby.owner)
+            {
+                lastAskedLobbyOwner = ev.from; //no need to ask if host has this mod
+                lobbyOwnerHasMod = true; //because he just sent me an RPC from this mod!
+            }
+        }
+        else
+            ev.Resolve(new GenericResult.Fail());
+    }
+
+    [SoftRPCMethod]
+    public static void AskHasThisMod(SoftRPCEvent ev)
+    {
+        ev.Resolve(new GenericResult.Ok()); //yup, I got this mod!
     }
 
     //when changing regions, update the StoryGameMode flags so that we still let new players join
@@ -116,7 +149,8 @@ public class Plugin : SimplerPlugin
                         if (score < bestScore)
                         {
                             bestScore = score;
-                            gameMode.myLastDenPos = room.name;
+                            //gameMode.myLastDenPos = room.name; //this doesn't do anything for clients
+                            gameMode.defaultDenPos = room.name; //works for NEW clients, but not old ones!
                             foundNewDen = true;
                         }
                     }
@@ -126,16 +160,72 @@ public class Plugin : SimplerPlugin
 
             if (foundNewDen) //don't change the den if we didn't find any
             {
-                gameMode.region = self.activeWorld.name;
-                gameMode.changedRegions = false; //lie and say we didn't change regions
+                gameMode.region = self.activeWorld.name; //update region; not sure why Meadow doesn't do this already
+                //gameMode.changedRegions = false; //we can't do this, because what if a client doesn't have this mod and tries to load into wrong region?
                 //gameMode.readyForTransition = StoryGameMode.ReadyForTransition.Closed; //actually don't change this; Meadow will change this to Closed on its own at the right time
-                Log("Closest den in region: " + gameMode.myLastDenPos);
+                Log("Closest den in region: " + gameMode.defaultDenPos);
+
+                //change myLastDenPos for ALL current players in the lobby
+                foreach (OnlinePlayer player in OnlineManager.players)
+                {
+                    if (player.isMe) continue; //don't invoke RPC to myself, duh
+
+                    player.InvokeRPC(ClearMyLastDenPos); //try using a SoftRPC
+                        /*.Then(result =>
+                        {
+                            if (result is not GenericResult.Ok) //if it fails, use GoToWinScreen (not ideal but it should work)
+                                player.InvokeRPC(StoryRPCs.GoToWinScreen, false, false, gameMode.defaultDenPos, null);
+                        //THIS ONLY WORKS IF THE PLAYER IS IN THE GAME; IN WHICH CASE, WE DON'T WANT IT TO CHANGE!!!
+                        });*/
+                }
             }
             else
                 Error("Could not find any den in region " + self.activeWorld.name);
         }
         catch (Exception ex) { Error(ex); }
     }
+
+    /// <summary>
+    /// If the host has this mod and changes regions, we get a new shelter to use when joining the game.
+    /// HOWEVER, if I do NOT have this mod and host changes regions, then I MIGHT (sometimes; not always) try to load into the wrong region.
+    /// So I must first ask if the host has the mod, and then I can join.
+    /// </summary>
+    private bool StoryGameMode_canJoinGame(Func<StoryGameMode, bool> orig, StoryGameMode self)
+    {
+        if (self.changedRegions && self.myLastDenPos == null)
+        {
+            if (lastAskedLobbyOwner == null || lastAskedLobbyOwner != self.lobby.owner) //we haven't asked for permission yet
+            {
+                lastAskedLobbyOwner = self.lobby.owner;
+                lobbyOwnerHasMod = false;
+                lastAskedLobbyOwner.InvokeRPC(AskHasThisMod)
+                    .Then(result =>
+                    {
+                        if (result is GenericResult.Ok)
+                            lobbyOwnerHasMod = true;
+                    });
+                //return orig(self); //wait until we have permission
+            }
+            else if (lobbyOwnerHasMod) //lobby owner has mod, so act as if changedRegions is always false
+            {
+                self.changedRegions = false;
+                bool ret = orig(self);
+                self.changedRegions = true;
+                return ret;
+            }
+        }
+
+        return orig(self);
+    }
+
+    #endregion
+
+    #region RandomizeShelterHooks
+
+    public static bool RandomizeStartingShelter = false;
+
+    private const string RANDOMIZE_SHELTERS_ID = "RANDOMIZESHELTER";
+    private CheckBox RandomShelterCheckbox = null;
 
     //if RandomizeStartingShelter, randomize the spawn den location
     private void RainMeadow_SaveStateHandler(Action<RainMeadow.RainMeadow, PlayerProgression, StoryGameMode, RainWorldGame> orig, RainMeadow.RainMeadow realSelf, PlayerProgression self, StoryGameMode storyGameMode, RainWorldGame game)
@@ -154,7 +244,7 @@ public class Plugin : SimplerPlugin
             if (!RandomizeStartingShelter)
                 return;
 
-            string den = self.currentSaveState.denPosition;
+            string den = storyGameMode.myLastWarp?.destRoom ?? self.currentSaveState.denPosition; //use last warp if it exists; hopefully it doesn't
             try
             { //find any shelter except the current one
                 self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.saveStateNumber, new string[] { den }, 1, 1f, 1000f, 10000f);
