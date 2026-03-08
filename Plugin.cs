@@ -72,7 +72,7 @@ public class Plugin : SimplerPlugin
 
     #endregion
 
-    #region ChaningWorldRPCs
+    #region ChangingWorldRPCs
 
     private static bool lobbyOwnerHasMod = false;
     private static OnlinePlayer lastAskedLobbyOwner = null;
@@ -95,6 +95,7 @@ public class Plugin : SimplerPlugin
     /// <summary>
     /// Clearing myLastDenPos causes me to use the host's denPos (gameMode.defaultDenPos) instead of my own.
     /// </summary>
+    [Obsolete("Clients now just read defaultDenPos from state, since it actually is in the state somewhere")]
     [SoftRPCMethod] //apparently SoftRPCs still take RPCEvents, although they should actually be instanced of type SoftRPCEvent (so ev as SoftRPCEvent should work)
     public static void ClearMyLastDenPos(RPCEvent ev)//, string newDenPos)
     {
@@ -150,6 +151,9 @@ public class Plugin : SimplerPlugin
         {
             if (OnlineManager.lobby == null || !OnlineManager.lobby.isOwner || !RainMeadow.RainMeadow.isStoryMode(out StoryGameMode gameMode))
                 return;
+
+            gameMode.region = self.activeWorld.name; //update region; not sure why Meadow doesn't do this already
+
             if (oldRegion == null || self.activeWorld.name == oldRegion)
             {
                 Log($"Didn't change regions. Old region={oldRegion}, activeWorld.name={self.activeWorld.name}");
@@ -185,7 +189,7 @@ public class Plugin : SimplerPlugin
                         {
                             bestScore = score;
                             //gameMode.myLastDenPos = room.name; //this doesn't do anything for clients
-                            gameMode.defaultDenPos = room.name; //works for NEW clients, but not old ones!
+                            gameMode.defaultDenPos = room.name; //WHY ARE NONE OF THE DEN FIELDS ACTUALLY SYNCED???? clients receive this value but do not copy it over!??
                             foundNewDen = true;
                         }
                     }
@@ -195,10 +199,12 @@ public class Plugin : SimplerPlugin
 
             if (foundNewDen) //don't change the den if we didn't find any
             {
-                gameMode.region = self.activeWorld.name; //update region; not sure why Meadow doesn't do this already
+                //gameMode.region = self.activeWorld.name; //update region; not sure why Meadow doesn't do this already
                 //gameMode.changedRegions = false; //we can't do this, because what if a client doesn't have this mod and tries to load into wrong region?
                 //gameMode.readyForTransition = StoryGameMode.ReadyForTransition.Closed; //actually don't change this; Meadow will change this to Closed on its own at the right time
+                
                 Log("Closest den in region: " + gameMode.defaultDenPos);
+                return; //no need to do anything more here?
 
                 //change myLastDenPos for ALL current players in the lobby
                 foreach (OnlinePlayer player in OnlineManager.players)
@@ -254,9 +260,29 @@ public class Plugin : SimplerPlugin
     private const string RANDOMIZE_SHELTERS_ID = "RANDOMIZESHELTER";
     private CheckBox RandomShelterCheckbox = null;
 
-    //if RandomizeStartingShelter, randomize the spawn den location
+    /// <summary>
+    /// pre-fix = use defaultDenPos if we have changed regions; otherwise use the saveState's den.
+    /// post-fix = if RandomizeStartingShelter, randomize the spawn den location.
+    /// </summary>
     private void RainMeadow_SaveStateHandler(Action<RainMeadow.RainMeadow, PlayerProgression, StoryGameMode, RainWorldGame> orig, RainMeadow.RainMeadow realSelf, PlayerProgression self, StoryGameMode storyGameMode, RainWorldGame game)
     {
+        try
+        {
+            if (!storyGameMode.lobby.isOwner) //leave the host alone; he's fine
+            {
+                if (storyGameMode.changedRegions)
+                {
+                    //dig up defaultDenPos out of the abyss we call the state data structure. It IS THERE and WE DO HAVE IT; we just have to dig it up!
+                    //lobby => lobbyState => lobbyResourceDataStates => StoryLobbyData.State => defaultDenPos
+                    storyGameMode.myLastDenPos = (storyGameMode.lobby.latestState.resourceDataStates.list.Find(s => s is StoryLobbyData.State) as StoryLobbyData.State).defaultDenPos;
+                    Log("Found defaultDenPos in StoryLobbyData.State: " + storyGameMode.myLastDenPos);
+                }
+                else
+                    storyGameMode.myLastDenPos = null; //clients always clear myLastDenPos; it only causes problems
+            }
+        }
+        catch (Exception ex) { Error(ex); }
+
         orig(realSelf, self, storyGameMode, game);
 
         try
