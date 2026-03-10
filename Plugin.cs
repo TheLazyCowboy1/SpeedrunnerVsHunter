@@ -251,6 +251,31 @@ public class Plugin : SimplerPlugin
         return orig(self);
     }
 
+    private void MyLastDenPosFix(StoryGameMode storyGameMode)
+    {
+        try
+        {
+            if (!storyGameMode.lobby.isOwner) //don't mess with the host's save
+            {
+                //changedRegions is always false when starting the game, apparently
+                //if (storyGameMode.changedRegions && lobbyOwnerHasMod && storyGameMode.lobby.owner == lastAskedLobbyOwner)
+                if (lobbyOwnerHasMod && storyGameMode.lobby.owner == lastAskedLobbyOwner) //if host does not have this mod, defaultDenPos may be inaccurate
+                {
+                    //dig up defaultDenPos out of the abyss we call the state data structure. It IS THERE and WE DO HAVE IT; we just have to dig it up!
+                    //lobby => lobbyState => lobbyResourceDataStates => StoryLobbyData.State => defaultDenPos
+                    storyGameMode.myLastDenPos = (storyGameMode.lobby.latestState.resourceDataStates.list.Find(s => s is StoryLobbyData.State) as StoryLobbyData.State).defaultDenPos;
+                    Log("Found defaultDenPos in StoryLobbyData.State: " + storyGameMode.myLastDenPos);
+                }
+                else
+                {
+                    storyGameMode.myLastDenPos = null; //clients always clear myLastDenPos; it only causes problems
+                    Log("Set myLastDenPos to null, because that annoying thing only causes problems.");
+                }
+            }
+        }
+        catch (Exception ex) { Error(ex); }
+    }
+
     #endregion
 
     #region RandomizeShelterHooks
@@ -266,25 +291,7 @@ public class Plugin : SimplerPlugin
     /// </summary>
     private void RainMeadow_SaveStateHandler(Action<RainMeadow.RainMeadow, PlayerProgression, StoryGameMode, RainWorldGame> orig, RainMeadow.RainMeadow realSelf, PlayerProgression self, StoryGameMode storyGameMode, RainWorldGame game)
     {
-        try
-        {
-            if (!storyGameMode.lobby.isOwner) //don't mess with the host's save
-            {
-                if (storyGameMode.changedRegions && lobbyOwnerHasMod && storyGameMode.lobby.owner == lastAskedLobbyOwner)
-                {
-                    //dig up defaultDenPos out of the abyss we call the state data structure. It IS THERE and WE DO HAVE IT; we just have to dig it up!
-                    //lobby => lobbyState => lobbyResourceDataStates => StoryLobbyData.State => defaultDenPos
-                    storyGameMode.myLastDenPos = (storyGameMode.lobby.latestState.resourceDataStates.list.Find(s => s is StoryLobbyData.State) as StoryLobbyData.State).defaultDenPos;
-                    Log("Found defaultDenPos in StoryLobbyData.State: " + storyGameMode.myLastDenPos);
-                }
-                else
-                {
-                    storyGameMode.myLastDenPos = null; //clients always clear myLastDenPos; it only causes problems
-                    Log("Set myLastDenPos to null, because that annoying thing only causes problems.");
-                }
-            }
-        }
-        catch (Exception ex) { Error(ex); }
+        MyLastDenPosFix(storyGameMode);
 
         orig(realSelf, self, storyGameMode, game);
 
