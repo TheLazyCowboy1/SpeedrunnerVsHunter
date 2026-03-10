@@ -28,7 +28,7 @@ public static class RandomShelterChooser
     /// <param name="distanceLeniency">How far away the shelter CAN be. 0 = MUST be furthest possible shelter; 1 = ANY possible shelter.</param>
     /// <returns></returns>
     /// <exception cref="IndexOutOfRangeException">Thrown if not enough shelters in the region to support the number of teams.</exception>
-    public static string GetRespawnShelter(string region, SlugcatStats.Name slugcat, string[] teamShelters, int team, float distanceLeniency = 0.5f, float targetDistance = 600, float mapBorderDistance = 100)
+    public static string GetRespawnShelter(string region, SlugcatStats.Timeline slugcat, string[] teamShelters, int team, float distanceLeniency = 0.5f, float targetDistance = 600, float mapBorderDistance = 100)
     {
         RandomShelterFilter.FindValidShelterPositions(region, slugcat);
 
@@ -181,9 +181,9 @@ public static class RandomShelterFilter
     public static Vector2[] secondaryShelterPositions = new Vector2[0];
 
     private static string lastSearchedRegion = "";
-    private static SlugcatStats.Name lastSearchedSlugcat = null;
+    private static SlugcatStats.Timeline lastSearchedSlugcat = null;
 
-    public static void FindValidShelterPositions(string region, SlugcatStats.Name slugcat)
+    public static void FindValidShelterPositions(string region, SlugcatStats.Timeline slugcat)
     {
         if (lastSearchedRegion == region && lastSearchedSlugcat == slugcat)
             return; //there's nothing to be done! lucky you!

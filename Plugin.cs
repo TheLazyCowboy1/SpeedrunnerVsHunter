@@ -143,7 +143,8 @@ public class Plugin : SimplerPlugin
     private void OverWorld_WorldLoaded(On.OverWorld.orig_WorldLoaded orig, OverWorld self, bool warpUsed)
     {
         string oldRegion = self.activeWorld?.name;
-        AbstractRoom myRoom = self.reportBackToGate?.room.abstractRoom ?? (self.specialWarpCallback as Watcher.WarpPoint)?.room.abstractRoom;
+        //AbstractRoom myRoom = self.reportBackToGate?.room.abstractRoom ?? (self.specialWarpCallback as Watcher.WarpPoint)?.room.abstractRoom;
+        string myRoomName = self.reportBackToGate?.room.abstractRoom.name ?? (self.specialWarpCallback as Watcher.WarpPoint)?.Data.destRoom;
 
         orig(self, warpUsed);
 
@@ -160,10 +161,12 @@ public class Plugin : SimplerPlugin
                 return;
             }
 
-            bool foundNewDen = false;
             //change myLastDenPos
             try
             {
+                bool foundNewDen = false;
+
+                AbstractRoom myRoom = self.activeWorld.GetAbstractRoom(myRoomName);
                 if (myRoom == null) //if we don't have the current room
                 {
                     foreach (var player in self.game.Players) //loop through players
@@ -194,34 +197,34 @@ public class Plugin : SimplerPlugin
                         }
                     }
                 }
-            }
-            catch (Exception ex) { Error(ex); }
 
-            if (foundNewDen) //don't change the den if we didn't find any
-            {
-                //gameMode.region = self.activeWorld.name; //update region; not sure why Meadow doesn't do this already
-                //gameMode.changedRegions = false; //we can't do this, because what if a client doesn't have this mod and tries to load into wrong region?
-                //gameMode.readyForTransition = StoryGameMode.ReadyForTransition.Closed; //actually don't change this; Meadow will change this to Closed on its own at the right time
-                
-                Log("Closest den in region: " + gameMode.defaultDenPos);
-                return; //no need to do anything more here?
-
-                //change myLastDenPos for ALL current players in the lobby
-                foreach (OnlinePlayer player in OnlineManager.players)
+                if (foundNewDen) //don't change the den if we didn't find any
                 {
-                    if (player.isMe) continue; //don't invoke RPC to myself, duh
+                    //gameMode.region = self.activeWorld.name; //update region; not sure why Meadow doesn't do this already
+                    //gameMode.changedRegions = false; //we can't do this, because what if a client doesn't have this mod and tries to load into wrong region?
+                    //gameMode.readyForTransition = StoryGameMode.ReadyForTransition.Closed; //actually don't change this; Meadow will change this to Closed on its own at the right time
 
-                    player.InvokeRPC(ClearMyLastDenPos); //try using a SoftRPC
+                    Log("Closest den in region: " + gameMode.defaultDenPos + ". My room: " + myRoom?.name);
+                    return; //no need to do anything more here?
+
+                    //change myLastDenPos for ALL current players in the lobby
+                    foreach (OnlinePlayer player in OnlineManager.players)
+                    {
+                        if (player.isMe) continue; //don't invoke RPC to myself, duh
+
+                        player.InvokeRPC(ClearMyLastDenPos); //try using a SoftRPC
                         /*.Then(result =>
                         {
                             if (result is not GenericResult.Ok) //if it fails, use GoToWinScreen (not ideal but it should work)
                                 player.InvokeRPC(StoryRPCs.GoToWinScreen, false, false, gameMode.defaultDenPos, null);
                         //THIS ONLY WORKS IF THE PLAYER IS IN THE GAME; IN WHICH CASE, WE DON'T WANT IT TO CHANGE!!!
                         });*/
+                    }
                 }
+                else
+                    Error("Could not find any den in region " + self.activeWorld.name);
             }
-            else
-                Error("Could not find any den in region " + self.activeWorld.name);
+            catch (Exception ex) { Error(ex); }
         }
         catch (Exception ex) { Error(ex); }
     }
@@ -310,12 +313,12 @@ public class Plugin : SimplerPlugin
             string den = self.currentSaveState.warpPointTargetAfterWarpPointSave?.destRoom ?? self.currentSaveState.denPosition; //use last warp if it exists; hopefully it doesn't
             try
             { //find any shelter except the current one
-                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.saveStateNumber, new string[] { den }, 1, 1f, 1000f, 10000f);
+                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.currentTimelinePosition, new string[] { den }, 1, 1f, 1000f, 10000f);
             } catch (KeyNotFoundException ex)
             {
                 Log("Cannot find position of lobby spawn shelter: ERROR: " + ex.Message);
                 //try again; this time just to find ANY random shelter
-                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.saveStateNumber, new string[0], 0, 1f, 1000f, 10000f);
+                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.currentTimelinePosition, new string[0], 0, 1f, 1000f, 10000f);
             }
             self.currentSaveState.warpPointTargetAfterWarpPointSave = null; //don't spawn at the warp!
 
