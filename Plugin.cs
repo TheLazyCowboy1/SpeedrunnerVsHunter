@@ -96,7 +96,7 @@ public class Plugin : SimplerPlugin
     /// Clearing myLastDenPos causes me to use the host's denPos (gameMode.defaultDenPos) instead of my own.
     /// </summary>
     [Obsolete("Clients now just read defaultDenPos from state, since it actually is in the state somewhere")]
-    [SoftRPCMethod] //apparently SoftRPCs still take RPCEvents, although they should actually be instanced of type SoftRPCEvent (so ev as SoftRPCEvent should work)
+    [SoftRPCMethod]
     public static void ClearMyLastDenPos(RPCEvent ev)//, string newDenPos)
     {
         if (RainMeadow.RainMeadow.isStoryMode(out StoryGameMode gameMode))
@@ -114,7 +114,7 @@ public class Plugin : SimplerPlugin
             ev.Resolve(new GenericResult.Fail());
     }
 
-    [SoftRPCMethod]
+    [SoftRPCMethod] //apparently SoftRPCs still take RPCEvents, although they should actually be instanced of type SoftRPCEvent (so "ev as SoftRPCEvent" should work)
     public static void AskHasModRPC(RPCEvent ev)
     {
         ev.Resolve(new GenericResult.Ok()); //yup, I got this mod!
