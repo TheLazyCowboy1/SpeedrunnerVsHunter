@@ -25,7 +25,7 @@ public class Plugin : SimplerPlugin
     #region Setup
     public override int LogLevel => Options.LogLevel;
 
-    public Plugin() : base(null)//base(new Options()) //no config menu for now
+    public Plugin() : base(null) //new Options()) //no config menu for now, because we can't sync the options anyway
     {
     }
 
@@ -313,12 +313,12 @@ public class Plugin : SimplerPlugin
             string den = self.currentSaveState.warpPointTargetAfterWarpPointSave?.destRoom ?? self.currentSaveState.denPosition; //use last warp if it exists; hopefully it doesn't
             try
             { //find any shelter except the current one
-                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.currentTimelinePosition, new string[] { den }, 1, 1f, 1000f, 10000f);
+                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.currentTimelinePosition, new string[] { den }, 1, Options.RandomShelterRandomness, Options.TargetRandomShelterDistance, 10000f);
             } catch (KeyNotFoundException ex)
             {
                 Log("Cannot find position of lobby spawn shelter: ERROR: " + ex.Message);
                 //try again; this time just to find ANY random shelter
-                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.currentTimelinePosition, new string[0], 0, 1f, 1000f, 10000f);
+                self.currentSaveState.denPosition = RandomShelterChooser.GetRespawnShelter(den.Split('_')[0], self.currentSaveState.currentTimelinePosition, new string[0], 0, Options.RandomShelterRandomness, Options.TargetRandomShelterDistance, 10000f);
             }
             self.currentSaveState.warpPointTargetAfterWarpPointSave = null; //don't spawn at the warp!
 
