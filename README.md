@@ -2,7 +2,7 @@
 
 Current planned scope: A VERY simple custom Rain Meadow gamemode.
 
-Planned features:
+Initially Planned Features:
 * The host is the "Speedrunner" who plays Story mode fairly normally. The intended rule of the game is that the Speedrunner loses if he dies on karma 1.
 * The "Hunters" spawn in random shelters other than the Speedrunner's shelter in the region.
 * If the Speedrunner tries to go through a gate, Hunters are kicked to lobby or sleep screen.
